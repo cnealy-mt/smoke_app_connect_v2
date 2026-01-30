@@ -1,0 +1,105 @@
+name: Run UPDATE_SMOKE_APP.R
+
+on:
+  schedule:
+    - cron: "5 * * * *"   # every hour at 26 minutes past
+  workflow_dispatch:       # manual trigger available
+
+# --- ADD THIS BLOCK ---
+concurrency:
+  group: smoke-app-update
+  cancel-in-progress: false 
+# ----------------------
+
+jobs:
+  update_smoke_app:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      # 2. Setup R
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4.1"
+
+      # 3. Cache R packages
+      - name: Cache renv packages
+        id: cache-renv
+        uses: actions/cache@v3
+        with:
+          path: |
+            renv/library
+            ~/.cache/R/renv
+          key: ${{ runner.os }}-R-${{ hashFiles('**/renv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-R-
+
+      # 4. Install Linux system dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev libcairo2-dev \
+            libgit2-dev libglpk-dev libtiff-dev libfftw3-dev libgdal-dev libgeos-dev libproj-dev \
+            libv8-dev libudunits2-dev pkg-config \
+            libeccodes-dev libnetcdf-dev
+
+
+
+      # 5.1 Install Python
+      - name: Setup Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 5.1.1 Set RETICULATE_PYTHON environment variable
+      - name: Set RETICULATE_PYTHON env var
+        run: echo "RETICULATE_PYTHON=${{ steps.setup-python.outputs.python-path }}" >> $GITHUB_ENV
+
+      # 5.1.2 Install Python Packages
+      - name: Install required Python packages
+        run: |
+          pip install --upgrade pip
+          pip install s3fs xarray metpy boto3 numcodecs numpy zarr==3.1.1 virtualenv \
+          cfgrib netcdf4 pydap
+
+      - name: Verify cfgrib availability
+        run: |
+          python - << 'EOF'
+          import xarray as xr
+          print(xr.backends.list_engines())
+          EOF
+
+      # 5.2 Cache pip packages
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-custom
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 5. Restore renv packages
+      - name: Restore renv packages
+        if: steps.cache-renv.outputs.cache-hit != 'true'
+        run: |
+          Rscript -e 'install.packages("renv", repos = "https://cran.rstudio.com")'
+          Rscript -e 'renv::restore()'
+
+      # 6. Run your R update script
+      - name: Run update script
+        run: Rscript UPDATE_SMOKE_APP.R
+
+      # 7. Commit & push updated files (amend previous commit)
+      - name: Commit and push changes
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit --amend -m "Automated hourly update" || echo "No changes to commit"
+          git push --force origin main

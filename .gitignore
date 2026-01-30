@@ -1,0 +1,32 @@
+# ✅ Keep .Rproj file
+# (do NOT ignore *.Rproj)
+!*.Rproj
+
+# ❌ Ignore RStudio user/session data
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+.Rapp.session
+
+# ❌ Ignore R package build artifacts
+.Rcheck/
+*.tar.gz
+*.Rbuildignore
+
+# ❌ Ignore OS clutter
+.DS_Store
+Thumbs.db
+
+# ❌ Ignore temp/editor files
+*.swp
+*~
+
+# ❌ Ignore everything in data/temp
+#data/
+data/temp
+
+# ❌ Ignore install-generated files and folders
+tasks/
+app.bat
