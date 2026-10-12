@@ -1,0 +1,61 @@
+name: Hourly Air Monitoring Update
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: hourly-air-data
+  cancel-in-progress: true
+
+jobs:
+  update_hourly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4.1"
+
+      # Core system drivers required to compile sf and terra package binaries
+      - name: Install all system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcurl4-openssl-dev libssl-dev libxml2-dev libpng-dev libjpeg-dev libcairo2-dev \
+            libgit2-dev libglpk-dev libtiff-dev libfftw3-dev libgdal-dev libgeos-dev libproj-dev \
+            libv8-dev libudunits2-dev pkg-config \
+            libeccodes-dev libnetcdf-dev
+            
+      # --- ADD THESE TWO RENV STEPS HERE ---
+      - name: Cache renv packages
+        id: cache-renv
+        uses: actions/cache@v3
+        with:
+          path: |
+            renv/library
+            ~/.cache/R/renv
+          key: ${{ runner.os }}-R-${{ hashFiles('**/renv.lock') }}-hourly
+          restore-keys: |
+            ${{ runner.os }}-R-hourly
+
+      - name: Restore renv packages
+        if: steps.cache-renv.outputs.cache-hit != 'true'
+        run: |
+          Rscript -e 'install.packages("renv", repos = "https://cran.rstudio.com")'
+          Rscript -e 'renv::restore()'
+      # -------------------------------------
+      - name: Run quick hourly update script
+        run: Rscript UPDATE_HOURLY_MONITORING.R
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit --amend -m "Automated hourly monitoring update" || echo "No changes to commit"
+          git push --force origin main
