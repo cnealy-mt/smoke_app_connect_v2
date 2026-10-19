@@ -83,6 +83,11 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add data/ www/
-          # This will only push if actual modifications occurred during a successful download
-          git commit --amend -m "Automated daily meteorological update" || echo "No changes to commit"
-          git push --force origin main
+          
+          # Check if there are actually changes staged in data/ or www/ before committing
+          if git diff --cached --quiet; then
+            echo "No changes to commit in data/ or www/"
+          else
+            git commit -m "Automated daily meteorological data update"
+            git push origin main
+          fi
